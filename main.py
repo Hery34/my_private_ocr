@@ -5,19 +5,30 @@ import fitz  # PyMuPDF
 
 app = FastAPI(title="PaddleOCR API")
 
-# Langue OCR : "fr", "en", "ch"...
-ocr = PaddleOCR(use_angle_cls=True, lang="fr", show_log=False)
+# --- Réglages de performance ---
+# enable_mkldnn : accélération CPU Intel (souvent x2-x3)
+# cpu_threads   : utilise vos 4 cœurs au lieu d'un seul
+# use_angle_cls=False : ~20-30% plus rapide (à remettre True si pages de travers)
+ocr = PaddleOCR(
+    use_angle_cls=False,
+    lang="fr",
+    show_log=False,
+    enable_mkldnn=True,
+    cpu_threads=4,
+)
+
+DPI = 150  # 150 = plus rapide ; repassez à 200 si petit texte mal reconnu
 
 
 def ocr_image_path(path):
-    result = ocr.ocr(path, cls=True)
+    result = ocr.ocr(path, cls=False)
     return [
         {"texte": mot[1][0], "score": round(float(mot[1][1]), 4)}
         for page in result if page for mot in page
     ]
 
 
-def ocr_pdf_bytes(data, dpi=200):
+def ocr_pdf_bytes(data, dpi=DPI):
     pages_out = []
     doc = fitz.open(stream=data, filetype="pdf")
     for i in range(len(doc)):
@@ -51,7 +62,6 @@ async def run_ocr(file: UploadFile):
         return {"type": "pdf", "nb_pages": len(pages),
                 "nb_lignes": total, "pages": pages}
 
-    # sinon : image
     suffix = os.path.splitext(filename)[1] or ".png"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
         tmp.write(data)
